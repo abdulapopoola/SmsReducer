@@ -1,0 +1,375 @@
+package com.lawal.smsreducer;
+
+import java.io.InputStream;
+
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.database.Cursor;
+import android.net.Uri;
+import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.provider.Contacts.People;
+import android.telephony.SmsManager;
+import android.telephony.SmsMessage;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemSelectedListener;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.lawal.data.Constants;
+import com.lawal.data.SQLDbAdapter;
+import com.lawal.logic.BasicLogics;
+import com.lawal.logic.DBLogics;
+import com.lawal.logic.DictParser;
+import com.lawal.logic.StringHelper;
+import com.lawal.logic.Transformer;
+
+@SuppressWarnings("unchecked")
+public class SMSMain extends Activity implements OnClickListener {
+
+	private static final int DELETE = 1;
+	private static final int PICK_CONTACT = 1;
+	private static final String DEBUG_TAG = "SMSMain";
+	private EditText mTextField;
+	private TextView mOutStatView;
+	private TextView mInStatView;
+	private EditText mContactTextField;
+	private String mPreviousText;
+	private String mReducedText;
+
+	private SQLDbAdapter mDb;
+
+	@Override
+	public void onCreate(Bundle icicle) {
+		super.onCreate(icicle);
+		setContentView(R.layout.layout1);
+		mDb = new SQLDbAdapter(this);
+
+		SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
+		boolean isInstalled = settings.getBoolean(getString(R.string.app_installed), false);
+		if (!isInstalled) {
+
+			InputStream is = getResources().openRawResource(R.raw.basic);
+			DictParser wa = new DictParser(mDb, is);
+
+			Editor editor = settings.edit();
+			editor.putBoolean(getString(R.string.app_installed), true);
+			editor.commit();
+		}
+
+		mTextField = (EditText) findViewById(R.id.RawText);
+		mContactTextField = (EditText) findViewById(R.id.editText_contactDisplay);
+		mInStatView = (TextView) findViewById(R.id.inStatTextView);
+		mOutStatView = (TextView) findViewById(R.id.outstatTextView);
+
+		Button undoBtn = (Button) findViewById(R.id.btn_undo);
+		Button sendConvBtn = (Button) findViewById(R.id.btn_sendConverted);
+		Button contactBtn = (Button) findViewById(R.id.btn_contactSelect);
+		Spinner modeSelect = (Spinner) findViewById(R.id.spinner_modes);
+
+		sendConvBtn.setOnClickListener(this);
+		contactBtn.setOnClickListener(this);
+		undoBtn.setOnClickListener(this);
+
+		ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this, R.array.mode, android.R.layout.simple_spinner_item);
+		adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+		modeSelect.setAdapter(adapter);
+		modeSelect.setOnItemSelectedListener(new OnItemSelectedListener() {
+
+			@Override
+			public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+				// String mode = parent.getItemAtPosition(position).toString();
+				String rawString = mTextField.getText().toString().trim();
+				mPreviousText = mTextField.getText().toString().trim();
+				;
+				switch (position - 1) {
+				case 0:
+					onBasicSelected(rawString);
+					break;
+				case 1:
+					onModerateSelected(rawString);
+					break;
+				case 2:
+					onExtremeSelected(rawString);
+					break;
+				default:
+					break;
+				}
+				mTextField.setText(mReducedText);
+
+			}
+
+			@Override
+			public void onNothingSelected(AdapterView<?> parent) {
+			}
+		});
+
+		//
+		mTextField.addTextChangedListener(mTextWatcher);
+		mTextField.setText("I am laughing out loud late at night!" + " Whao in my own opinion we should not sleep before ten just because it is late."
+				+ " byebye and see you later. This is a sample. Book now to see the magic!");
+
+		// mTextField.setText("I thought of buying a Nook (about 10 dollar $) but instead I bought the Kindle for one hundred and forty Euros, maybe amazon product is better. Althought Google has there own book service now."
+		// + "but it may not be robust enough yet for power users like you. We should submit our application as soon as possible"
+		// + ". At least we know we tried our lazy best. Salam Alaykum.");
+
+	}
+
+	private TextWatcher mTextWatcher = new TextWatcher() {
+
+		@Override
+		public void onTextChanged(CharSequence s, int start, int before, int count) {
+		}
+
+		@Override
+		public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+		}
+
+		@Override
+		public void afterTextChanged(Editable s) {
+			updateStats();
+		}
+	};
+
+	@Override
+	public void onClick(View view) {
+		
+		int id = view.getId();
+
+		if (id == R.id.btn_sendConverted) {
+
+			String phoneNo = mContactTextField.getText().toString();
+			String message = mTextField.getText().toString();
+			if (!StringHelper.isEmpty(message, phoneNo))
+				sendSMS(phoneNo, message);
+			else
+				Toast.makeText(getBaseContext(), "Please enter both phone number and message.", Toast.LENGTH_SHORT).show();
+		}
+
+		else if (id == R.id.btn_contactSelect)
+
+		{
+			Intent intent = new Intent(Intent.ACTION_PICK, People.CONTENT_URI);
+			startActivityForResult(intent, PICK_CONTACT);
+
+		}
+
+		else if (id == R.id.btn_undo) {
+			mTextField.setText(mPreviousText);
+		}
+		updateStats();
+
+	}
+
+	protected void onBasicSelected(String rawString) {
+		String[] basicWord = performBasicReduction(rawString);
+		mReducedText = StringHelper.concatenateByDelimeter(basicWord, Constants.SPACE);
+	}
+
+	protected void onExtremeSelected(String rawString) {
+		String[] replaceWords = performExtreme(rawString);
+		mReducedText = StringHelper.concatenateByDelimeter(replaceWords, null);
+	}
+
+	protected void onModerateSelected(String rawString) {
+		String[] replaceWords = performModerate(rawString);
+		String val = StringHelper.concatenateByDelimeter(replaceWords, Constants.SPACE);
+		mReducedText = (val);
+	}
+
+	private void updateStats() {
+
+		String raw = mTextField.getText().toString();
+		mInStatView.setText(formatStatStr(raw));
+		mOutStatView.setText(formatStatStr(mPreviousText));
+
+	}
+
+	protected String[] performBasicReduction(String rawString) {
+
+		String string = StringHelper.replaceAllIn(rawString, StringHelper.CURRENCY_TO_SYMBOL);
+
+		String[] rawWords = string.split("\\s+");
+
+		String[] words = transForm(rawWords, BasicLogics.IngLogic);
+
+		return words;
+	}
+
+	protected String[] performModerate(String rawString) {
+		String[] words = rawString.split("\\s+");
+		DBLogics dblogic = new DBLogics(mDb);
+		words = dblogic.replaceWords(words);
+
+		words = transForm(words, BasicLogics.IngLogic, BasicLogics.DoubleVowelLogic);
+		words = transForm(words, BasicLogics.Disemvowel);
+		words = transForm(words, BasicLogics.DoubleCharLogic);
+
+		return words;
+	}
+
+	private String[] performExtreme(String rawString) {
+
+		String[] words = rawString.split("\\s+");
+
+		words = transForm(words, BasicLogics.IngLogic, BasicLogics.DoubleVowelLogic);
+
+		words = transForm(words, BasicLogics.DoubleCharLogic);
+
+		DBLogics dblogic = new DBLogics(mDb);
+		words = dblogic.replaceWords(words);
+
+		String[] out = transForm(words, BasicLogics.CapitalizeFirstLetters, BasicLogics.RemovePunctuactions);
+
+		return out;
+	}
+
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+
+		switch (requestCode) {
+		case PICK_CONTACT:
+			if (resultCode == RESULT_OK) {
+				Uri contactData = data.getData();
+				Cursor c = managedQuery(contactData, null, null, null, null);
+				// String phoneNumber = null, name = null;
+				if (c.moveToFirst()) {
+					// String contactId = c.getString(c.getColumnIndex(ContactsContract.Contacts._ID));
+					//
+					// name = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts.DISPLAY_NAME));
+					//
+					// String hasPhone = c.getString(c.getColumnIndex(ContactsContract.Contacts.HAS_PHONE_NUMBER));
+					//
+					// if (hasPhone.equalsIgnoreCase("1"))
+					// hasPhone = "true";
+					// else
+					// hasPhone = "false";
+					//
+					// if (Boolean.parseBoolean(hasPhone)) {
+					// Cursor phones = getContentResolver().query(ContactsContract.CommonDataKinds.Phone.CONTENT_URI, null,
+					// ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = " + contactId, null, null);
+					// while (phones.moveToNext()) {
+					// phoneNumber = phones.getString(phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+					// }
+					// phones.close();
+					// }
+					//
+					// System.out.println("SMSMain.onActivityResult() " + phoneNumber);
+					// mContactTextField.setText(name + "," + phoneNumber);
+
+					String columns[] = c.getColumnNames();
+					for (String column : columns) {
+						int index = c.getColumnIndex(column);
+						System.out.println("SMSMain.onActivityResult() " + column);
+						Log.v(DEBUG_TAG, "Column: " + column + " == [" + c.getString(index) + "]");
+					}
+				}
+
+				// String name = c.getString(c.getColumnIndexOrThrow(People.NUMBER));
+				// System.out.println("SMSMain.onActivityResult() " + name);
+				mContactTextField.setText(c.getString(c.getColumnIndex("primary_phone")));
+			}
+
+			break;
+
+		default:
+			break;
+		}
+
+	}
+
+	// ---sends an SMS message to another device---
+	private void sendSMS(String phoneNumber, String message) {
+		PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, SMS.class), 0);
+		SmsManager sms = SmsManager.getDefault();
+		sms.sendTextMessage(phoneNumber, null, message, pi, null);
+	}
+
+	// private CharSequence performBasicReduction(String str) {
+	//
+	// String statStr = "RawText:\t\t\t"+formatStatStr(str);
+	// //
+	// String statStr+="\nConvertedText:\t\t\t"+formatStatStr(str);
+	// mInStatView.setText(statStr);
+	// return reduceStr;
+	// }
+
+	private String[] transForm(String[] rawSentence, Transformer<String[], String[]>... transformers) {
+		String[] output = null;
+		for (Transformer<String[], String[]> tr : transformers) {
+			output = tr.apply(rawSentence);
+		}
+		return output;
+
+	}
+
+	private String formatStatStr(String str) {
+		if (str == null)
+			return "";
+		int nChar = str.length();
+		int nMsgNeeded = 1 + nChar / SmsMessage.MAX_USER_DATA_SEPTETS;
+		return String.valueOf(nChar) + "/" + String.valueOf(160 * nMsgNeeded) + "\n" + String.valueOf(nMsgNeeded) + "Msg(s)";
+	}
+
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		super.onCreateOptionsMenu(menu);
+		MenuInflater inflater = getMenuInflater();
+		inflater.inflate(R.menu.menu, menu);
+		return true;
+	}
+
+	// @Override
+	// public boolean onCreateOptionsMenu(Menu menu) {
+	// boolean result = super.onCreateOptionsMenu(menu);<
+	// menu.add(0, DELETE, Menu.NONE,"del");
+	// return result;
+	// }
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		switch (item.getItemId()) {
+		case R.id.delete_menu_item:
+			deleteDraft();
+			break;
+		case R.id.addword_menu_item:
+			startActivity(new Intent(this, LinkCreationActivity.class));
+			break;
+		}
+		return super.onOptionsItemSelected(item);
+	}
+
+	// private void addNewLink() {
+	// String title = mTitleText.getText().toString();
+	// String body = mBodyText.getText().toString();
+	//
+	// if (mRowId == null) {
+	// long id = mDbHelper.createNote(title, body);
+	// if (id > 0) {
+	// mRowId = id;
+	// }
+	// } else {
+	// mDbHelper.updateNote(mRowId, title, body);
+	// }
+	// }
+
+	private void deleteDraft() {
+
+	}
+
+}

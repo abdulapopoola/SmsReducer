@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="addword_menu_item_caption">Add Word</string>
+    <string name="open_drafts_menu_item_caption">Open Drafts</string>
+    <string name="settings_menu_item_caption">Settings</string>
+    <string name="delete_menu_item_caption">Delete</string>
+    <string name="select_contact_btn_caption">Select</string>
+    <string name="contact_display_hint">To:</string>
+    <string name="send_output_caption">Send</string>
+    <string name="sendOriginalbtncaption">Undo</string>
+    <string name="save_draft_btncaption">Save Draft</string>
+    <string name="raw_text_hint">Tap to Compose</string>
+	<string name="moderateBtnCaption">Moderate</string>
+	<string name="extremeReduceBtnCaption">Extreme</string>
+	<string name="basicReduceBtnCaption">Basic</string>
+	<string name="app_name">SMS REDUCER</string>
+	<string name="delete_draft">DELETE</string>
+	<string name="save">Save</string>
+	<string name="cancel">Cancel</string>
+	<string name="app_installed">app_installed</string>
+	<string name="options">Choose an option</string>
+<<<<<<< .mine
+	<string-array name="shortening_modes_array">
+		<item>Basic</item>
+		<item>Moderate</item>
+		<item>Extreme</item>
+	</string-array>
+	<string name="shortenBtn">Shorten!</string>
+=======
+	
+	<string-array name="mode">
+	 <item>None</item>
+        <item>Basic</item>
+        <item>Moderate</item>
+        <item>Extreme</item>
+    </string-array>
+    
+    
+    
+>>>>>>> .r6
+</resources>

@@ -1,0 +1,8 @@
+1. Ability of user to create word - abbr pair
+2. Monitor user changes to provide heurestic/predictions later
+3. Landscape Mode            
+4. Better layouting ( remove hardcoded heights) done
+5. Menu actions. 
+6. Buttons icons
+
+      

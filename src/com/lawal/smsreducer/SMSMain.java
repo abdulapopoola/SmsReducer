@@ -1,0 +1,456 @@
+package com.lawal.smsreducer;
+
+import java.io.InputStream;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.PendingIntent;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.SharedPreferences.Editor;
+import android.net.Uri;
+import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.provider.Contacts.People;
+import android.telephony.SmsManager;
+import android.telephony.SmsMessage;
+import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.AdapterView.OnItemSelectedListener;
+
+import com.lawal.data.Constants;
+import com.lawal.data.SQLDbAdapter;
+import com.lawal.logic.BasicLogics;
+import com.lawal.logic.DBLogics;
+import com.lawal.logic.DictParser;
+import com.lawal.logic.StringHelper;
+import com.lawal.logic.Transformer;
+import com.lawal.smsreducer.Recipient.RecipientNumber;
+
+@SuppressWarnings("unchecked")
+public class SMSMain extends Activity implements OnClickListener {
+
+	protected static final int DIALOG_SELECT_PHONES = 0xD1;
+	protected static final int DIALOG_INSERT = 0xD2;
+
+	private static final String DEBUG_TAG = "SMSMain";
+	private static final int DELETE = 1;
+	private static final int PICK_CONTACT = 1;
+	private static final int GET_DRAFT = 2;
+
+	private String selectedMode = "none"; //initially at none
+	
+	// private TextView mInStatView;
+	private EditText mContactTextField;
+
+	private SQLDbAdapter mDb;
+
+	private TextView mOutStatView;
+	private String mPreviousText;
+	private String mReducedText;
+	private Recipient mRecipient;
+
+	private EditText mTextField;
+	
+
+	@Override
+	public void onCreate(Bundle icicle) {
+		super.onCreate(icicle);
+		setContentView(R.layout.layout1);
+		mDb = new SQLDbAdapter(this);
+
+		SharedPreferences settings = PreferenceManager.getDefaultSharedPreferences(this);
+		boolean isInstalled = settings.getBoolean(getString(R.string.app_installed), false);
+		if (!isInstalled) {
+
+			InputStream is = getResources().openRawResource(R.raw.basic);
+			DictParser wa = new DictParser(mDb, is);
+
+			Editor editor = settings.edit();
+			editor.putBoolean(getString(R.string.app_installed), true);
+			editor.commit();
+		}
+
+		setUpControls();
+
+		// mTextField.setText("I am laughing out loud late at night!" + " Whao in my own opinion we should not sleep before ten just because it is late."
+		// + " byebye and see you later. This is a sample. Book now to see the magic!");
+
+		// mTextField.setText("I thought of buying a Nook (about 10 dollar $) but instead I bought the Kindle for one hundred and forty Euros, maybe amazon product is better. Althought Google has there own book service now."
+		// + "but it may not be robust enough yet for power users like you. We should submit our application as soon as possible"
+		// + ". At least we know we tried our lazy best. Salam Alaykum.");
+
+	}
+
+	protected void setUpControls() {
+		mTextField = (EditText) findViewById(R.id.RawText);
+
+		mContactTextField = (EditText) findViewById(R.id.editText_contactDisplay);
+		// mInStatView = (TextView) findViewById(R.id.inStatTextView);
+		mOutStatView = (TextView) findViewById(R.id.outstatTextView);
+
+		Button undoBtn = (Button) findViewById(R.id.btn_undo);
+		Button sendConvBtn = (Button) findViewById(R.id.btn_sendConverted);
+		Button contactBtn = (Button) findViewById(R.id.btn_contactSelect);
+		Button saveDraftBtn = (Button) findViewById(R.id.saveDraftBtn);
+		Button shortenBtn = (Button) findViewById(R.id.shortenBtn);
+
+		
+		Spinner modeSelect = (Spinner) findViewById(R.id.spinner_modes);
+
+		sendConvBtn.setOnClickListener(this);
+		contactBtn.setOnClickListener(this);
+		undoBtn.setOnClickListener(this);
+		shortenBtn.setOnClickListener(this);
+		saveDraftBtn.setOnClickListener(this);
+
+		ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this, R.array.mode, android.R.layout.simple_spinner_item);
+		adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+		modeSelect.setAdapter(adapter);
+
+		modeSelect.setOnItemSelectedListener(new OnItemSelectedListener() {
+
+			@Override
+			public void onNothingSelected(AdapterView<?> parent) {
+			}
+			@Override
+			public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+				// String mode = parent.getItemAtPosition(position).toString();
+
+				// String rawString = mTextField.getText().toString().trim();
+
+				String textvalue = mTextField.getText().toString().trim();
+				if (mPreviousText == null && !StringHelper.isEmpty(textvalue)) {
+					mPreviousText = textvalue;
+				}
+
+				//onNewSelection(position);
+			}
+
+		});
+
+		mTextField.addTextChangedListener(new SmsTextWatcher(this));
+	}
+
+	@Override
+	public boolean onCreateOptionsMenu(Menu menu) {
+		super.onCreateOptionsMenu(menu);
+		MenuInflater inflater = getMenuInflater();
+		inflater.inflate(R.menu.menu, menu);
+		return true;
+	}
+
+	@Override
+	public boolean onOptionsItemSelected(MenuItem item) {
+		switch (item.getItemId()) {
+		case  R.id.open_drafts_menu_item:
+			startActivityForResult(new Intent(this, DraftsActivity.class), GET_DRAFT);
+			break;
+		case R.id.addword_menu_item:
+			startActivity(new Intent(this, LinkCreationActivity.class));
+			break;
+		}
+		return super.onOptionsItemSelected(item);
+	}
+
+	@Override
+	protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+		
+
+		switch (requestCode) {
+		case PICK_CONTACT:
+			if (resultCode == RESULT_OK) {
+				selectContact(data);
+			}
+			break;
+			
+		case GET_DRAFT:
+			if (resultCode == RESULT_OK) {
+				
+				String body = data.getStringExtra(SQLDbAdapter.DRAFT_BODY_COL);
+				String recipient = data.getStringExtra(SQLDbAdapter.RECIPIENT_COL);
+				
+				mTextField.setText(body);
+				mContactTextField.setText(recipient);
+			}
+			break;
+		
+		default:
+			break;
+		}
+
+	}
+
+	protected void onBasicSelected(String rawString) {
+		String string = StringHelper.replaceAllIn(rawString, StringHelper.CURRENCY_TO_SYMBOL);
+
+		String[] rawWords = string.split("\\s+");
+
+		String[] words = transForm(rawWords, BasicLogics.IngLogic);
+		String[] basicWord = words;
+		mReducedText = StringHelper.concatenateByDelimeter(basicWord, Constants.SPACE);
+	}
+
+	@Override
+	protected Dialog onCreateDialog(int id) {
+
+		switch (id) {
+		case DIALOG_SELECT_PHONES:
+			return createPhonesDialog();
+
+		default:
+			return super.onCreateDialog(id);
+		}
+	}
+
+	@Override
+	public void onClick(View view) {
+
+		int id = view.getId();
+
+		switch (id) {
+
+		case (R.id.btn_sendConverted): {
+
+			String phoneNo = mContactTextField.getText().toString();
+			String message = mTextField.getText().toString();
+			if (!StringHelper.isEmpty(message, phoneNo))
+				sendSMS(phoneNo, message);
+			else {
+				Toast.makeText(getBaseContext(), "Please enter both phone number and message.", Toast.LENGTH_SHORT).show();
+			}
+			break;
+		}
+
+		case (R.id.btn_contactSelect):
+
+		{
+			Intent intent = new Intent(Intent.ACTION_PICK, People.CONTENT_URI);
+			startActivityForResult(intent, PICK_CONTACT);
+			break;
+
+		}
+
+		case (R.id.btn_undo): {
+			mTextField.setText(mPreviousText);
+			break;
+		}
+		case (R.id.shortenBtn): {
+			Spinner modeSelect = (Spinner) findViewById(R.id.spinner_modes);
+			int pos = (int) modeSelect.getSelectedItemId();
+			onNewSelection(pos);
+			break;
+		}
+		case (R.id.saveDraftBtn) :{
+			String draft_body = mTextField.getText().toString().trim();
+			String draft_recipient = mContactTextField.getText().toString().trim();
+			
+			SQLDbAdapter db = new SQLDbAdapter(this);
+			if(draft_body.length() == 0 && draft_recipient.length()==0)
+			{
+				//don't save if both fields are empty
+				break;
+			}
+			boolean status =db.saveDraft(draft_body, draft_recipient);
+			if(status)
+			{
+				Toast.makeText(this, "Draft saved", Toast.LENGTH_SHORT).show();
+			}
+			else
+			{
+				Toast.makeText(this, "Save operation failed", Toast.LENGTH_SHORT).show();
+			}
+			Log.v("clicked", "Save Button clicked");
+			break;
+		}
+		
+		default:
+			break;
+
+		}
+		updateStats();
+	}
+
+	protected void onExtremeSelected(String rawString) {
+		String[] words = rawString.split("\\s+");
+
+		words = transForm(words, BasicLogics.IngLogic, BasicLogics.DoubleVowelLogic);
+
+		words = transForm(words, BasicLogics.DoubleCharLogic);
+
+		DBLogics dblogic = new DBLogics(mDb);
+		words = dblogic.replaceWords(words);
+
+		String[] out = transForm(words, BasicLogics.CapitalizeFirstLetters, BasicLogics.RemovePunctuactions);
+		String[] replaceWords = out;
+		mReducedText = StringHelper.concatenateByDelimeter(replaceWords, Constants.SPACE);
+	}
+
+	protected void onModerateSelected(String rawString) {
+		String[] words = rawString.split("\\s+");
+		DBLogics dblogic = new DBLogics(mDb);
+		words = dblogic.replaceWords(words);
+
+		words = transForm(words, BasicLogics.IngLogic, BasicLogics.DoubleVowelLogic);
+		words = transForm(words, BasicLogics.Disemvowel);
+		words = transForm(words, BasicLogics.DoubleCharLogic);
+		String[] replaceWords = words;
+		String val = StringHelper.concatenateByDelimeter(replaceWords, Constants.SPACE);
+		mReducedText = (val);
+	}
+
+	protected void selectContact(Intent data) {
+		Uri contactData = data.getData();
+
+		mRecipient = Recipient.createRecipient(this, contactData);
+
+		if (null == mRecipient)
+			return;
+
+		switch (mRecipient.mNumbers.size()) {
+
+		case 0:
+			Toast.makeText(this, "Selected user has no phone number", Toast.LENGTH_LONG).show();
+			break;
+
+		case 1:
+			mContactTextField.setText(mRecipient.mNumbers.get(0).getNumber());
+			break;
+
+		default:
+			showDialog(DIALOG_SELECT_PHONES);
+			break;
+		}
+
+	}
+
+	private Dialog createPhonesDialog() {
+		int i = 0;
+		String[] items = new String[mRecipient.mNumbers.size()];
+
+		for (RecipientNumber phone : mRecipient.mNumbers) {
+			items[i++] = Recipient.typeToReadableName(phone.getType()) + ": " + phone.getNumber();
+		}
+
+		AlertDialog.Builder builder = new AlertDialog.Builder(this);
+		builder.setTitle("Select Number");
+		builder.setItems(items, new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int item) {
+				mContactTextField.setText(mRecipient.mNumbers.get(item).getNumber());
+				removeDialog(DIALOG_SELECT_PHONES);
+			}
+		});
+		builder.setOnCancelListener(new DialogInterface.OnCancelListener() {
+			public void onCancel(DialogInterface dialog) {
+				removeDialog(DIALOG_SELECT_PHONES);
+			}
+		});
+		AlertDialog alert = builder.create();
+
+		return alert;
+	}
+
+	private void deleteDraft() {
+
+	}
+
+	private String formatStatStr(String str) {
+		if (str == null)
+			return "";
+		int nChar = str.length();
+
+		// TODO check this out
+		// int[] reply = SmsMessage.calculateLength(str, false);
+		// int nSMSRequired = reply[0];
+		// int nRemaining = reply[2];
+		//
+		// if (nSMSRequired > 1 ) {
+		// mOutStatView.setText(nRemaining + " / " + nSMSRequired);
+		// mOutStatView.setVisibility(View.VISIBLE);
+		// } else {
+		// mOutStatView.setVisibility(View.GONE);
+		// }
+
+		int nMsgNeeded = 1 + nChar / SmsMessage.MAX_USER_DATA_SEPTETS;
+		return String.valueOf(nChar) + "/" + String.valueOf(160 * nMsgNeeded) + "\n" + String.valueOf(nMsgNeeded) + "Msg(s)";
+	}
+
+	// ---sends an SMS message to another device---
+	private void sendSMS(String phoneNumber, String message) {
+		PendingIntent pi = PendingIntent.getActivity(this, 0, new Intent(this, SMS.class), 0);
+		SmsManager sms = SmsManager.getDefault();
+		sms.sendTextMessage(phoneNumber, null, message, pi, null);
+	}
+
+	private String[] transForm(String[] rawSentence, Transformer<String[], String[]>... transformers) {
+		String[] output = null;
+		for (Transformer<String[], String[]> tr : transformers) {
+			output = tr.apply(rawSentence);
+		}
+		return output;
+
+	}
+
+	// @Override
+	// public boolean onCreateOptionsMenu(Menu menu) {
+	// boolean result = super.onCreateOptionsMenu(menu);
+	// menu.add(0, DELETE, Menu.NONE,"del");
+	// return result;
+	// }
+
+	// private void addNewLink() {
+	// String title = mTitleText.getText().toString();
+	// String body = mBodyText.getText().toString();
+	//
+	// if (mRowId == null) {
+	// long id = mDbHelper.createNote(title, body);
+	// if (id > 0) {
+	// mRowId = id;
+	// }
+	// } else {
+	// mDbHelper.updateNote(mRowId, title, body);
+	// }
+	// }
+
+	void updateStats() {
+
+		String raw = mTextField.getText().toString();
+		// mInStatView.setText(formatStatStr(raw));
+		mOutStatView.setText(formatStatStr(raw));
+
+	}
+
+	protected void onNewSelection(int position) {
+		String rawString = mTextField.getText().toString().trim();
+
+		switch (position - 1) {
+		case 0:
+			onBasicSelected(rawString);
+			mTextField.setText(mReducedText);
+			break;
+		case 1:
+			onModerateSelected(rawString);
+			mTextField.setText(mReducedText);
+			break;
+		case 2:
+			onExtremeSelected(rawString);
+			mTextField.setText(mReducedText);
+			break;
+		default:
+			break;
+		}
+	}
+}

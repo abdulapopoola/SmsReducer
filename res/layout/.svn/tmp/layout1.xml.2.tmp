@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+	xmlns:android="http://schemas.android.com/apk/res/android"
+	android:id="@+id/mainLayout"
+	android:layout_width="fill_parent"
+	android:layout_height="fill_parent"
+	android:orientation="vertical"
+	android:padding="5px">
+	<LinearLayout
+		android:layout_width="fill_parent"
+		android:orientation="horizontal"
+		android:layout_height="wrap_content"
+		android:layout_weight="1">
+		<EditText
+			android:id="@+id/editText_contactDisplay"
+			android:hint="@string/contact_display_hint"
+			android:layout_width="wrap_content"
+			android:layout_weight="10"
+			android:layout_height="fill_parent" />
+		<Button
+			android:id="@+id/btn_contactSelect"
+			android:layout_width="wrap_content"
+			android:layout_height="fill_parent"
+			android:text="@string/select_contact_btn_caption"
+			android:layout_weight="1" />
+	</LinearLayout>
+	<RelativeLayout
+		android:layout_width="fill_parent"
+		android:layout_height="wrap_content"
+		android:layout_weight="9">
+		<EditText
+		android:gravity="top"
+			android:id="@+id/RawText"
+			android:layout_height="fill_parent"
+			android:layout_width="fill_parent"
+			android:hint="@string/raw_text_hint"
+			android:scrollbars="vertical"
+			android:cursorVisible="true"
+			android:includeFontPadding="false" android:inputType="textAutoCorrect|textAutoComplete|textMultiLine|textLongMessage"></EditText>
+	</RelativeLayout>
+	<RelativeLayout
+		android:layout_width="fill_parent"
+		android:layout_height="wrap_content"
+		android:layout_weight="1">
+		<LinearLayout
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:id="@+id/modes"
+			android:orientation="horizontal">
+			<Spinner
+				android:layout_weight="5"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:id="@+id/spinner_modes">
+			</Spinner>
+			<Button
+				android:layout_weight="1"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:id="@+id/shortenBtn"
+				android:text="@string/shortenBtnCaption" />
+		</LinearLayout>
+<<<<<<< .mine
+
+		<Button android:layout_width="wrap_content" android:layout_margin="0dp"
+			android:layout_height="wrap_content" android:id="@+id/saveDraftBtn"
+			android:text="@string/save_draft_btncaption" android:layout_below="@id/modes"></Button>
+		<Button android:layout_width="wrap_content" android:layout_margin="0dp"
+			android:layout_toRightOf="@id/saveDraftBtn" android:layout_below="@id/modes"
+			android:layout_height="wrap_content" android:text="@string/sendOriginalbtncaption"
+=======
+		<Button
+			android:layout_width="wrap_content"
+			android:layout_height="wrap_content"
+			android:id="@+id/saveDraftBtn"
+			android:text="@string/save_draft_btncaption"
+			android:layout_below="@id/modes"></Button>
+		<Button
+			android:layout_width="wrap_content"
+			android:layout_toRightOf="@id/saveDraftBtn"
+			android:layout_below="@id/modes"
+			android:layout_height="wrap_content"
+			android:text="@string/sendOriginalbtncaption"
+>>>>>>> .r12
+			android:id="@+id/btn_undo"></Button>
+<<<<<<< .mine
+		
+		<TextView android:layout_height="wrap_content" android:layout_margin="0dp" android:layout_width="fill_parent"
+			android:layout_below="@id/modes" android:id="@+id/outstatTextView" 
+			android:layout_toRightOf="@id/btn_undo" android:text="Stats:"
+			android:layout_alignBottom="@id/btn_undo"
+			></TextView>
+		<Button android:layout_width="wrap_content" 
+			android:layout_alignParentRight="true" android:layout_below="@id/modes"
+			android:layout_height="wrap_content" android:id="@+id/btn_sendConverted"
+=======
+		<TextView
+			android:layout_height="wrap_content"
+			android:layout_width="wrap_content"
+			android:layout_below="@id/modes"
+			android:id="@+id/outstatTextView"
+			android:layout_toRightOf="@id/btn_undo"
+			android:text="Stats:"
+			android:layout_alignBaseline="@id/btn_undo"></TextView>
+		<Button
+			android:layout_width="wrap_content"
+			android:layout_alignParentRight="true"
+			android:layout_below="@id/modes"
+			android:layout_height="wrap_content"
+			android:id="@+id/btn_sendConverted"
+>>>>>>> .r12
+			android:text="@string/send_output_caption"></Button>
+	</RelativeLayout>
+</LinearLayout>
